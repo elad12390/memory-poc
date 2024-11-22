@@ -11,3 +11,6 @@ wheels/
 
 # Environment variables
 .env
+milvus_data
+etcd_data
+minio_data

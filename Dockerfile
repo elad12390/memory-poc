@@ -2,9 +2,12 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-COPY requirements.txt requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+COPY pyproject.toml /app
 
-COPY . .
+RUN pip install uv
+RUN uv sync
 
-CMD ["python", "rag.py"]
+COPY . /app
+
+WORKDIR /app
+CMD ["uv", "run", "src/main.py"]

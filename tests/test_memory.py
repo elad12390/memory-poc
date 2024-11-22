@@ -3,7 +3,7 @@ import time
 import json
 from datetime import datetime
 
-BASE_URL = "http://localhost:5000"
+BASE_URL = "http://localhost:5001"
 
 def make_request(endpoint, data):
     response = requests.post(f"{BASE_URL}/{endpoint}", json=data)

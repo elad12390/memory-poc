@@ -1,14 +1,17 @@
 from pymilvus import MilvusClient, model
-import os
+from loguru import logger
 
 class RAGService:
     def __init__(self, uri=None, token=None, collection_name="rag_collection"):
         """
         Initialize Milvus client with support for both local and server modes.
         """
+        logger.info(f"Initializing RAG service with collection: {collection_name}")
         if uri and token:
+            logger.info("Connecting to remote Milvus server")
             self.client = MilvusClient(uri=uri, token=token)
         else:
+            logger.info("Using local Milvus database")
             self.client = MilvusClient("milvus_demo.db")
         
         self.collection_name = collection_name
@@ -31,91 +34,95 @@ class RAGService:
         )
 
         # Create index for vector field
-        self.client.create_index(
-            collection_name=self.collection_name,
-            field_name="vector",
-            index_type="IVF_FLAT",
-            metric_type="COSINE",
-            params={"nlist": 1024},
-        )
+        self._create_index()
 
         # Set up embedding function
         self.embedding_fn = model.DefaultEmbeddingFunction()
+        logger.info("RAG service initialized successfully")
+
+    def _create_index(self):
+        """
+        Create an index for the vector field in the collection.
+        """
+        logger.info("Creating index for vector field")
+        try:
+            index_params = {
+                "index_type": "IVF_FLAT",
+                "metric_type": "COSINE",
+                "params": {"nlist": 1024}
+            }
+            self.client.create_index(
+                collection_name=self.collection_name,
+                field_name="vector",
+                index_params=index_params
+            )
+            logger.success("Index created successfully")
+        except Exception as e:
+            logger.error(f"Failed to create index: {str(e)}")
+            raise
 
     def add_documents(self, documents, metadata_list=None):
         """
         Add documents with optional metadata to the collection.
         """
-        vectors = self.embedding_fn.encode_documents(documents)
-        if metadata_list is None:
-            metadata_list = [{} for _ in documents]
+        logger.info(f"Adding {len(documents)} documents to collection")
+        try:
+            vectors = self.embedding_fn.encode_documents(documents)
+            if metadata_list is None:
+                metadata_list = [{} for _ in documents]
+                
+            data = [
+                {
+                    "id": i,
+                    "vector": vectors[i],
+                    "text": documents[i],
+                    "metadata": metadata_list[i]
+                } for i in range(len(vectors))
+            ]
             
-        data = [
-            {
-                "id": i,
-                "vector": vectors[i],
-                "text": documents[i],
-                "metadata": metadata_list[i]
-            } for i in range(len(vectors))
-        ]
-        
-        self.client.insert(collection_name=self.collection_name, data=data)
-        print(f"Added {len(documents)} documents to the collection.")
+            self.client.insert(collection_name=self.collection_name, data=data)
+            logger.success(f"Successfully added {len(documents)} documents")
+        except Exception as e:
+            logger.error(f"Error adding documents: {str(e)}")
+            raise
 
     def search(self, query, filter=None, top_k=3):
         """
         Perform semantic search with optional filtering.
         """
-        query_vector = self.embedding_fn.encode_queries([query])
-        search_params = {
-            "collection_name": self.collection_name,
-            "data": query_vector,
-            "limit": top_k,
-            "output_fields": ["text", "metadata"],
-        }
-        if filter:
-            search_params["filter"] = filter
-            
-        results = self.client.search(**search_params)
-        
-        return [
-            {
-                "id": item.id,
-                "score": item.distance,
-                "text": item.entity.get("text"),
-                "metadata": item.entity.get("metadata")
+        logger.info(f"Searching for: {query[:50]}... (top_k={top_k})")
+        try:
+            query_vector = self.embedding_fn.encode_queries([query])
+            search_params = {
+                "collection_name": self.collection_name,
+                "data": query_vector,
+                "limit": top_k,
+                "output_fields": ["text", "metadata"],
             }
-            for item in results[0]
-        ]
+            if filter:
+                search_params["filter"] = filter
+                
+            results = self.client.search(**search_params)
+            
+            logger.success(f"Search completed, found {len(results[0])} results")
+            return [
+                {
+                    "id": item.id,
+                    "score": item.distance,
+                    "text": item.entity.get("text"),
+                    "metadata": item.entity.get("metadata")
+                }
+                for item in results[0]
+            ]
+        except Exception as e:
+            logger.error(f"Search error: {str(e)}")
+            raise
 
     def delete_all(self):
         """
         Drop the collection and clean up.
         """
+        logger.warning(f"Deleting collection: {self.collection_name}")
         if self.client.has_collection(collection_name=self.collection_name):
             self.client.drop_collection(collection_name=self.collection_name)
             print(f"Deleted collection: {self.collection_name}")
-
-
-# Example Usage
-if __name__ == "__main__":
-    # Initialize RAG service
-    rag_service = RAGService()
-
-    # Add documents
-    documents = [
-        "Artificial intelligence was founded as an academic discipline in 1956.",
-        "Alan Turing was the first person to conduct substantial research in AI.",
-        "Born in Maida Vale, London, Turing was raised in southern England.",
-    ]
-    rag_service.add_documents(documents)
-
-    # Perform a semantic search
-    query = "Who is Alan Turing?"
-    results = rag_service.search(query)
-    print("Search Results:")
-    for result in results:
-        print(f"ID: {result['id']}, Score: {result['score']:.2f}, Text: {result['text']}")
-
-    # Delete all data
-    rag_service.delete_all()

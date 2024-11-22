@@ -4,6 +4,10 @@ import os
 from dotenv import load_dotenv
 from rag import RAGService
 from llm import LLM
+from loguru import logger
+
+# Configure loguru
+logger.add("logs/app.log", rotation="500 MB", level="INFO")
 
 # Load environment variables
 load_dotenv()
@@ -11,8 +15,8 @@ load_dotenv()
 app = Flask(__name__)
 
 # Get environment variables with defaults
-REDIS_HOST = os.getenv('REDIS_URL', 'redis://localhost:6379')
-MILVUS_URI = os.getenv('MILVUS_URI', 'http://localhost:19530')
+REDIS_HOST = os.getenv('REDIS_URL', 'redis://redis:6379/0')
+MILVUS_URI = os.getenv('MILVUS_URI', 'http://milvus:19530')
 MILVUS_TOKEN = os.getenv('MILVUS_TOKEN', 'root:Milvus')
 
 # Initialize services
@@ -40,12 +44,15 @@ def home():
 def process_input():
     data = request.json
     if not data or 'input' not in data:
+        logger.error("No input provided in request")
         return jsonify(error="No input provided"), 400
 
     input_text = data['input']
+    logger.info(f"Processing new input: {input_text[:50]}...")
     
     # Determine importance using LLM
     importance_percentage = float(llm.generate_response(IMPORTANCE_CHECK_PROMPT, input_text))
+    logger.info(f"Calculated importance: {importance_percentage}")
     
     # Calculate TTL for short-term memory
     ttl = MIN_TTL + (MAX_TTL - MIN_TTL) * (importance_percentage / 100)
@@ -53,6 +60,7 @@ def process_input():
     if importance_percentage < IMPORTANCE_THRESHOLD:
         # Store in short-term memory (Redis)
         redis_client.set(input_text, "stored", ex=int(ttl))
+        logger.info(f"Stored in short-term memory with TTL: {int(ttl)}")
         return jsonify({
             "status": "stored_short_term",
             "ttl": int(ttl),
@@ -61,6 +69,7 @@ def process_input():
 
     # Store in long-term memory (RAG)
     rag_service.add_documents([input_text])
+    logger.info("Stored in long-term memory")
     return jsonify({
         "status": "stored_long_term",
         "importance": importance_percentage
@@ -70,9 +79,11 @@ def process_input():
 def query_memory():
     data = request.json
     if not data or 'query' not in data:
+        logger.error("No query provided in request")
         return jsonify(error="No query provided"), 400
 
     query_text = data['query']
+    logger.info(f"Processing query: {query_text[:50]}...")
     
     # Check short-term memory first
     short_term_result = redis_client.get(query_text)
