@@ -73,6 +73,18 @@ services:
     ports:
       - "5001:5000"
 
+  attu:
+    image: zilliz/attu:v2.4.11
+    container_name: attu
+    environment:
+      - MILVUS_URL=milvus:19530
+    networks:
+      - rag_network
+    ports:
+      - "8000:3000"
+    depends_on:
+      - milvus
+
 networks:
   rag_network:
     driver: bridge

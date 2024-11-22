@@ -42,6 +42,7 @@ def home():
 
 @app.route('/process', methods=['POST'])
 def process_input():
+    print("Processing input")
     data = request.json
     if not data or 'input' not in data:
         logger.error("No input provided in request")
@@ -107,4 +108,4 @@ def query_memory():
     })
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, port=5000, host='0.0.0.0')

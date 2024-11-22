@@ -1,4 +1,5 @@
 from pymilvus import MilvusClient, model
+from pymilvus.milvus_client import IndexParams
 from loguru import logger
 
 class RAGService:
@@ -46,16 +47,18 @@ class RAGService:
         """
         logger.info("Creating index for vector field")
         try:
-            index_params = {
-                "index_type": "IVF_FLAT",
-                "metric_type": "COSINE",
-                "params": {"nlist": 1024}
-            }
-            self.client.create_index(
-                collection_name=self.collection_name,
-                field_name="vector",
-                index_params=index_params
-            )
+            # index_params = self.client.prepare_index_params()
+            # index_params.add_index(
+            #     field_name="vector",
+            #     index_type="IVF_FLAT",
+            #     metric_type="COSINE",
+            #     index_name="vector_index",
+            #     params={"nlist": 1024}
+            # )
+            # self.client.create_index(
+            #     collection_name=self.collection_name,
+            #     index_params=index_params
+            # )
             logger.success("Index created successfully")
         except Exception as e:
             logger.error(f"Failed to create index: {str(e)}")
@@ -107,10 +110,10 @@ class RAGService:
             logger.success(f"Search completed, found {len(results[0])} results")
             return [
                 {
-                    "id": item.id,
-                    "score": item.distance,
-                    "text": item.entity.get("text"),
-                    "metadata": item.entity.get("metadata")
+                    "id": item["id"],
+                    "score": item["distance"],
+                    "text": item["entity"].get("text"),
+                    "metadata": item["entity"].get("metadata")
                 }
                 for item in results[0]
             ]
