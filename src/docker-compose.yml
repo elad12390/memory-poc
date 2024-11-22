@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  redis:
+    image: "redis:latest"
+    container_name: redis
+    networks:
+      - rag_network
+    ports:
+      - "6379:6379"
+
+  milvus:
+    image: "milvusdb/milvus:latest"
+    container_name: milvus
+    networks:
+      - rag_network
+    ports:
+      - "19530:19530"
+      - "19531:19531"
+    environment:
+      - ETCD_HOST=etcd
+      - MINIO_ADDRESS=minio:9000
+
+  rag_service:
+    build: .
+    container_name: rag_service
+    depends_on:
+      - redis
+      - milvus
+    environment:
+      - REDIS_URL=${REDIS_URL:-redis:6379}
+      - MILVUS_HOST=${MILVUS_HOST:-milvus}
+      - MILVUS_PORT=${MILVUS_PORT:-19530}
+    networks:
+      - rag_network
+    ports:
+      - "5000:5000"
+
+networks:
+  rag_network:
+    driver: bridge
