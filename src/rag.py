@@ -1,3 +1,4 @@
+import time
 from pymilvus import MilvusClient, model
 from pymilvus.milvus_client import IndexParams
 from loguru import logger
@@ -75,8 +76,9 @@ class RAGService:
                 metadata_list = [{} for _ in documents]
                 
             data = [
-                {
-                    "id": i,
+                { 
+                    # the id will be a big number - the current nano-second timestamp
+                    "id": int(time.time_ns()),
                     "vector": vectors[i],
                     "text": documents[i],
                     "metadata": metadata_list[i]
@@ -120,6 +122,49 @@ class RAGService:
         except Exception as e:
             logger.error(f"Search error: {str(e)}")
             raise
+
+    def get_all_documents(self, limit=100):
+        """
+        Retrieve a limited number of documents from the collection.
+        
+        :param limit: The maximum number of documents to retrieve (default is 100).
+        """
+        logger.info(f"Retrieving up to {limit} documents from the collection: {self.collection_name}")
+        try:
+            # Query the collection with an empty filter and specified limit
+            res = self.client.query(
+                collection_name=self.collection_name,
+                filter="",  # Empty filter to retrieve all documents
+                output_fields=["id", "text", "metadata", "vector"],
+                limit=limit
+            )
+            
+            logger.success(f"Successfully retrieved {len(res)} documents from the collection")
+            return res
+        except Exception as e:
+            logger.error(f"Error retrieving documents from collection: {str(e)}")
+            raise
+
+
+
+    def delete_document(self, doc_id):
+        """
+        Delete a document from the collection by ID.
+        """
+        logger.info(f"Deleting document with ID: {doc_id}")
+        try:
+            # Create the boolean expression for deletion
+            expr = f"id in [{doc_id}]"
+            
+            # Perform the delete operation
+            collection = self.client.get_collection(self.collection_name)
+            collection.delete(expr)
+            
+            logger.success(f"Document with ID {doc_id} deleted successfully")
+        except Exception as e:
+            logger.error(f"Error deleting document with ID {doc_id}: {str(e)}")
+            raise
+
 
     def delete_all(self):
         """
