@@ -10,16 +10,17 @@ services:
       - "6379:6379"
 
   milvus:
-    image: "milvusdb/milvus:latest"
+    image: "milvusdb/milvus:v2.4.0"
     container_name: milvus
     networks:
       - rag_network
     ports:
       - "19530:19530"
-      - "19531:19531"
     environment:
-      - ETCD_HOST=etcd
+      - ETCD_CFG.endpoints=etcd:2379
       - MINIO_ADDRESS=minio:9000
+    volumes:
+      - milvus_data:/var/lib/milvus
 
   rag_service:
     build: .
@@ -29,8 +30,8 @@ services:
       - milvus
     environment:
       - REDIS_URL=${REDIS_URL:-redis:6379}
-      - MILVUS_HOST=${MILVUS_HOST:-milvus}
-      - MILVUS_PORT=${MILVUS_PORT:-19530}
+      - MILVUS_URI=http://milvus:19530
+      - MILVUS_TOKEN=root:Milvus
     networks:
       - rag_network
     ports:
@@ -39,3 +40,6 @@ services:
 networks:
   rag_network:
     driver: bridge
+
+volumes:
+  milvus_data:
